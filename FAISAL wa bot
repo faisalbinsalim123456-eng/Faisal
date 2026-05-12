@@ -1,0 +1,66 @@
+const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys")
+const OpenAI = require("openai")
+require("dotenv").config() // 👈 baca API key dari .env
+
+// 🔥 INI TEMPAT API KEY DIPAKAI (dari .env)
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY=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
+})
+
+async function startBot() {
+
+  const { state, saveCreds } = await useMultiFileAuthState("./session")
+
+  const sock = makeWASocket({
+    auth: state,
+    printQRInTerminal: false
+  })
+
+  sock.ev.on("creds.update", saveCreds)
+
+  // 🔢 PAIRING CODE
+  const phoneNumber = "601158490738" // tukar nombor kau
+  const code = await sock.requestPairingCode(phoneNumber)
+
+  console.log("PAIRING CODE:", code)
+
+  // 💬 MESSAGE HANDLER
+  sock.ev.on("messages.upsert", async ({ messages }) => {
+
+    const m = messages[0]
+    if (!m.message) return
+
+    const text =
+      m.message.conversation ||
+      m.message.extendedTextMessage?.text
+
+    if (!text) return
+
+    try {
+
+      // 🤖 AI RESPONSE
+      const ai = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "You are a helpful WhatsApp AI bot." },
+          { role: "user", content: text }
+        ]
+      })
+
+      const reply = ai.choices[0].message.content
+
+      await sock.sendMessage(m.key.remoteJid, { text: reply })
+
+    } catch (err) {
+
+      await sock.sendMessage(m.key.remoteJid, {
+        text: "AI error 😢"
+      })
+
+    }
+
+  })
+
+}
+
+startBot()
